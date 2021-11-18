@@ -111,6 +111,7 @@ lapic_init(void)
 	lapicw(TPR, 0);
 }
 
+// Read the LAPIC indentifier(APIC ID) to tell which CPU our code is currently running on
 int
 cpunum(void)
 {
