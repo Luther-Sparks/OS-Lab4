@@ -4,15 +4,74 @@
 #include <kern/env.h>
 #include <kern/pmap.h>
 #include <kern/monitor.h>
+#include <kern/sched.h>
 
 void sched_halt(void);
 
+struct Node nodepool[NENV];
+struct Queue FBQueue[4];
+int timeslice_counter = 0;
+
+// push a node to the back of the queue
+struct Queue* push(struct Queue* queue, struct Node* node) {
+	if (queue->rear == NULL) {
+		queue->front = node;
+		queue->rear = node;
+	}
+	else {
+		node->next = NULL;
+		queue->rear = node;
+	}
+	return queue;
+}
+
+// pop a node from the front of the queue
+struct Queue* pop(struct Queue* queue) {
+	if (queue->front == NULL) {
+		return queue;
+	}
+	else {
+		Node* temp = queue->front;
+		queue->front = queue->front->next;
+		temp->next = NULL;
+	}
+	return queue;
+}
+
+// remove a node which environment equals env from the queue
+int remove_by_env(struct Queue* queue, struct Env* env) {
+	Node* cur = queue->front;
+	if (cur->env->env_id == env->env_id) {
+		queue->front = queue->front->next;
+		cur->next = NULL;
+		return 1;
+	}
+	else {
+		Node* prev = cur;
+		cur = cur->next;
+		while (cur != NULL) {
+			if (cur->env->env_id == env->env_id) {
+				prev->next = cur->next;
+				cur->next = NULL;
+				return 1;
+			}
+			prev = cur;
+			cur = cur->next;
+		}
+		return 0;
+	}
+}
+
+// check if the queue is empty
+inline int emptyQueue(struct Queue* queue) {
+	return queue->front == NULL;
+}
 
 // Choose a user environment to run and run it.
 void sched_yield(void)
 {
-	struct Env *idle;
-
+	// struct Env *idle;
+	
 
 	// Implement simple round-robin scheduling.
 	//
@@ -29,8 +88,30 @@ void sched_yield(void)
 	// no runnable environments, simply drop through to the code
 	// below to halt the cpu.
 
-	// LAB 4: Your code here.
+	for (int i = 0; i < 4; i++) {
+		if (!emptyQueue(&FBQueue[i])) {
+			Node* cur = FBQueue[i].front;
+			while (cur != NULL) {
+				if (cur->env->env_status == ENV_RUNNABLE) {
+					env_run(cur->env);
+				}
+				if (cur->env->env_id == curenv->env_id) {		
+					// 由于设计会使当前运行的环境被放在队列的最后，这种情况表明该队列中已没有其他可以运行的环境
+					if (curenv && curenv->env_status == ENV_RUNNING) {
+						env_run(curenv);
+					}
+				}
+				cur = cur->next;
+			}
+		}
+	}
+	sched_halt();
 
+	// LAB 4: Your code here.
+	
+	// 首先考察最高优先级
+
+/*
 	int start = 0;
 	int j;
 
@@ -51,6 +132,7 @@ void sched_yield(void)
 		env_run(curenv);
 	}
 	sched_halt();
+*/
 }
 
 // Halt this CPU when there is nothing to do. Wait until the

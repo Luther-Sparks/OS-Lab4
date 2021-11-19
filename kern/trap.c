@@ -13,6 +13,9 @@
 #include <kern/picirq.h>
 #include <kern/cpu.h>
 #include <kern/spinlock.h>
+// add my sched.h
+#include <kern/sched.h>
+
 
 static struct Taskstate ts;
 
@@ -275,6 +278,29 @@ trap_dispatch(struct Trapframe *tf)
 	if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER)
 	{
 		lapic_eoi();
+		extern struct Node nodepool[NENV];
+		extern struct Queue FBQueue[4];
+		curenv->env_timeslice++;
+		if (curenv->env_priority != 3) {
+			if (curenv->env_timeslice == SLICE(curenv->env_priority)) {
+				// need to switch to lower level queue
+				remove_by_env(&FBQueue[curenv->env_priority], curenv);
+				curenv->env_priority++;
+				push(&FBQueue[curenv->env_priority], &nodepool[ENVX(curenv->env_id)]);
+				curenv->env_timeslice = 0;
+			}
+			else {
+				// still in same queue
+				remove_by_env(&FBQueue[curenv->env_priority], curenv);
+				push(&FBQueue[curenv->env_priority], &nodepool[ENVX(curenv->env_id)]);
+			}
+		}
+		else {
+			// lowest priority, do not switch queues
+			// still in same queue
+			remove_by_env(&FBQueue[curenv->env_priority], curenv);
+			push(&FBQueue[curenv->env_priority], &nodepool[ENVX(curenv->env_id)]);
+		}
 		sched_yield();
 		return;
 	}

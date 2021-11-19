@@ -65,6 +65,11 @@ struct Env {
 	uint32_t env_ipc_value;		// Data value sent to us
 	envid_t env_ipc_from;		// envid of the sender
 	int env_ipc_perm;		// Perm of page mapping received
+
+	// add some attributes to store the current priority and timeslice
+	int env_priority;				// current priority of this environment
+	int env_timeslice;				// current timeslice of this environment
+	//TODO update env initialization
 };
 
 #endif // !JOS_INC_ENV_H
