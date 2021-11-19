@@ -24,7 +24,8 @@ typedef struct Queue {
     int length;                     // length of the queue
 }Queue;
 
-extern struct Node nodepool[4];
+extern struct Node nodepool[NENV];
+extern struct Queue FBQueue[4];
 
 
 #define SLICE(priority) (0x1 << (priority)) 

@@ -70,7 +70,7 @@ lapic_init(void)
 	// If we cared more about precise timekeeping,
 	// TICR would be calibrated using an external time source.
 	lapicw(TDCR, X1);
-	lapicw(TIMER, PERIODIC | (IRQ_OFFSET + IRQ_TIMER));
+	lapicw(TIMER, PERIODIC | (IRQ_OFFSET + IRQ_TIMER));			// 32个cpu周期为一个timeslice
 	lapicw(TICR, 10000000); 
 
 	// Leave LINT0 of the BSP enabled so that it can get

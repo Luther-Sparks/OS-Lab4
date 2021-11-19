@@ -233,6 +233,15 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	e->env_status = ENV_RUNNABLE;
 	e->env_runs = 0;
 
+
+	// init the env priority
+	e->env_priority = 0;
+	e->env_timeslice = 0;
+	nodepool[ENVX(e->env_id)].env = e;
+	nodepool[ENVX(e->env_id)].next = NULL;
+	push(&FBQueue[0], &nodepool[ENVX(curenv->env_id)]);
+	
+
 	// Clear out all the saved register state,
 	// to prevent the register values
 	// of a prior environment inhabiting this Env structure
