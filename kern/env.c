@@ -21,6 +21,83 @@ static struct Env *env_free_list;	// Free environment list
 
 #define ENVGENSHIFT	12		// >= LOGNENV
 
+
+struct Node nodepool[NENV];
+struct Queue FBQueue[4];
+int timeslice_counter = 0;
+
+// push a node to the back of the queue
+struct Queue* push(struct Queue* queue, struct Node* node) {
+	if (queue->rear == NULL) {
+		queue->front = node;
+		queue->rear = node;
+	}
+	else {
+		node->next = NULL;
+		queue->rear->next = node;
+		queue->rear = node;
+	}
+	return queue;
+}
+
+// pop a node from the front of the queue
+struct Queue* pop(struct Queue* queue) {
+	if (queue->front == NULL) {
+		return queue;
+	}
+	else {
+		Node* temp = queue->front;
+		queue->front = queue->front->next;
+		temp->next = NULL;
+	}
+	return queue;
+}
+
+void print(struct Queue* queue) {
+	Node* temp = queue->front;
+	while (temp != NULL) {
+		cprintf("%d-->", temp->env->env_id);
+		temp = temp->next;
+	}
+	cprintf("\n");
+}
+
+// remove a node which environment equals env from the queue
+int remove_by_env(struct Queue* queue, struct Env* env) {
+	Node* cur = queue->front;
+	if (cur == NULL) {
+		return 0;
+	}
+	if (cur->env->env_id == env->env_id) {
+		queue->front = queue->front->next;
+		if (queue->front == NULL) {
+			queue->rear = NULL;
+		}
+		cur->next = NULL;
+		return 1;
+	}
+	else {
+		Node* prev = cur;
+		cur = cur->next;
+		while (cur != NULL) {
+			if (cur->env->env_id == env->env_id) {
+				prev->next = cur->next;
+				cur->next = NULL;
+				return 1;
+			}
+			prev = cur;
+			cur = cur->next;
+		}
+		return 0;
+	}
+}
+
+// check if the queue is empty
+int emptyQueue(struct Queue* queue) {
+	return queue->front == NULL;
+}
+
+
 // Global descriptor table.
 //
 // Set up global descriptor table (GDT) with separate segments for
@@ -124,6 +201,16 @@ env_init(void)
 		envs[i].env_id = 0;
 		envs[i].env_link = env_free_list;
 		env_free_list = &envs[i];
+	}
+
+	// initialize nodepool and FBQueue
+	for (int i = 0; i < NENV; i++) {
+		nodepool[i].env = NULL;
+		nodepool[i].next = NULL;
+	}
+	for (int i = 0; i < 4; i++) {
+		FBQueue[i].front = NULL;
+		FBQueue[i].rear = NULL;
 	}
 
 	// Per-CPU part of the initialization
@@ -237,9 +324,10 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	// init the env priority
 	e->env_priority = 0;
 	e->env_timeslice = 0;
+	cprintf("before set: %x\n", e);
 	nodepool[ENVX(e->env_id)].env = e;
 	nodepool[ENVX(e->env_id)].next = NULL;
-	push(&FBQueue[0], &nodepool[ENVX(curenv->env_id)]);
+	push(&FBQueue[0], &nodepool[ENVX(e->env_id)]);
 	
 
 	// Clear out all the saved register state,
@@ -406,6 +494,8 @@ env_create(uint8_t *binary, enum EnvType type)
 	if ((r = env_alloc(&e, 0) != 0)) {
 		panic("create env failed\n");
 	}
+	cprintf("after set: %x\n", nodepool[ENVX(e->env_id)]);
+
 
 	load_icode(e, binary);
 	e->env_type = type;
@@ -462,6 +552,7 @@ env_free(struct Env *e)
 	e->env_status = ENV_FREE;
 	e->env_link = env_free_list;
 	env_free_list = e;
+
 }
 
 //
@@ -481,9 +572,15 @@ env_destroy(struct Env *e)
 	}
 
 	env_free(e);
+	remove_by_env(&FBQueue[e->env_priority], e);
+	nodepool[ENVX(e->env_id)].env = NULL;
+	nodepool[ENVX(e->env_id)].next = NULL;
+
 
 	if (curenv == e) {
 		curenv = NULL;
+		cprintf("set curenv to NULL\n");
+		cprintf("begin sched_yield with curenv as NULL\n");
 		sched_yield();
 	}
 }
@@ -546,7 +643,7 @@ env_run(struct Env *e)
 	e->env_status = ENV_RUNNING;
 	e->env_runs++;
 	lcr3(PADDR(e->env_pgdir));
-	unlock_kernel();						
+	unlock_kernel();
 	env_pop_tf(&e->env_tf);
 }
 

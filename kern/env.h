@@ -10,6 +10,32 @@ extern struct Env *envs;		// All environments
 #define curenv (thiscpu->cpu_env)		// Current environment
 extern struct Segdesc gdt[];
 
+// the node of the queue to implement MLFQ algorithm
+typedef struct Node {
+    struct Env* env;                // this environment
+    struct Node* next;                     // next Node in the queue
+} Node;
+
+// feedback queue
+// its node stores the information about the environment's priority information
+typedef struct Queue {
+    Node* front;                    // front Node
+    Node* rear;                     // rear Node
+}Queue;
+
+extern struct Node nodepool[NENV];
+extern struct Queue FBQueue[4];
+
+
+#define SLICE(priority) (0x1 << (priority)) 
+int remove_by_env(struct Queue* queue, struct Env* env);
+struct Queue* push(struct Queue* queue, struct Node* node);
+struct Queue* pop(struct Queue* queue);
+void print(struct Queue* queue);
+int emptyQueue(struct Queue* queue);
+
+
+
 void	env_init(void);
 void	env_init_percpu(void);
 int	env_alloc(struct Env **e, envid_t parent_id);

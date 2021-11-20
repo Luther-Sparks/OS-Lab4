@@ -278,8 +278,6 @@ trap_dispatch(struct Trapframe *tf)
 	if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER)
 	{
 		lapic_eoi();
-		extern struct Node nodepool[NENV];
-		extern struct Queue FBQueue[4];
 		curenv->env_timeslice++;
 		if (curenv->env_priority != 3) {
 			if (curenv->env_timeslice == SLICE(curenv->env_priority)) {

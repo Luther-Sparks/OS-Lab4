@@ -69,7 +69,6 @@ struct Env {
 	// add some attributes to store the current priority and timeslice
 	int env_priority;				// current priority of this environment
 	int env_timeslice;				// current timeslice of this environment
-	//TODO update env initialization
 };
 
 #endif // !JOS_INC_ENV_H
