@@ -65,6 +65,25 @@ struct Env {
 	uint32_t env_ipc_value;		// Data value sent to us
 	envid_t env_ipc_from;		// envid of the sender
 	int env_ipc_perm;		// Perm of page mapping received
+
+	// FIXME
+	int priority;			// priority of the environment
+	int timeslice;			// timeslice that the environment has used
 };
+
+
+#define INFINIE_TIMES	0xFFFFFFFF
+
+typedef struct Node {
+	struct Node* next;
+	struct Env * env;
+}Node;
+typedef struct Queue {
+	int timelimit;
+	Node* front;	
+	Node* rear;
+}Queue;
+Queue MFQueue[4];
+Node nodepool[NENV];
 
 #endif // !JOS_INC_ENV_H
