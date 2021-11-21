@@ -29,11 +29,10 @@ i386_init(void)
 
 	// Lab 2 memory management initialization functions
 	mem_init();
-
 	// Lab 3 user environment initialization functions
 	env_init();
 	trap_init();
-
+	
 	// Lab 4 multiprocessor initialization functions
 	mp_init();	
 	lapic_init();	
@@ -52,8 +51,10 @@ i386_init(void)
 	ENV_CREATE(TEST, ENV_TYPE_USER);
 #else
 	// Touch all you want.
-	ENV_CREATE(user_dumbfork, ENV_TYPE_USER);
+	ENV_CREATE(user_forktree, ENV_TYPE_USER);
 #endif // TEST*
+
+
 
 	// Schedule and run the first user environment!
 	sched_yield();

@@ -277,18 +277,23 @@ trap_dispatch(struct Trapframe *tf)
 		lapic_eoi();
 		// FIXME
 		totalslice++;
-		if (totalslice == 20) {
-			for (int i = 1; i < 4; i++) {
-				Node* node = MFQueue[i].front;
-				if (node == NULL) {
+		if (totalslice == 20)
+		{
+			// reached 20 timeslice. set every env into the first MFQueue
+			for (int i = 1; i < 4; i++)
+			{
+				Node *p = MFQueue[i].front;
+				if (p == NULL)
+				{
 					continue;
 				}
-				while(node != NULL) {
-					e_remove(node->env);
-					node->env->priority = 0;
-					node->env->timeslice = 0;
-					e_insert(0, node->env);
-					node = MFQueue[i].front;
+				while (p != NULL)
+				{
+					e_remove(p->env);
+					p->env->priority = 0;
+					p->env->timeslice = 0;
+					e_insert(0, p->env);
+					p = MFQueue[i].front;
 				}
 			}
 			totalslice = 0;
@@ -349,7 +354,7 @@ void trap(struct Trapframe *tf)
 		// Copy trap frame (which is currently on the stack)
 		// into 'curenv->env_tf', so that running the environment
 		// will restart at the trap point.
-		curenv->env_tf = *tf; 
+		curenv->env_tf = *tf;
 		// The trapframe on the stack should be ignored from here on.
 		tf = &curenv->env_tf;
 	}
@@ -359,7 +364,7 @@ void trap(struct Trapframe *tf)
 	last_tf = tf;
 
 	// Dispatch based on what type of trap occurred
-	trap_dispatch(tf); 
+	trap_dispatch(tf);
 
 	// If we made it to this point, then no other environment was
 	// scheduled, so we should return to the current environment

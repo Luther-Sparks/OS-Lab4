@@ -10,98 +10,115 @@ void sched_halt(void);
 
 // Choose a user environment to run and run it.
 void sched_yield(void)
-{
-	// struct Env *idle;
-	if (curenv) {
-		for (int i = 0; i < 4; i++) {
-			Node* cur;
-			if (i != curenv->priority) {
-				cur = MFQueue[i].front;
-				while (cur != NULL) {
-					if (cur->env->env_status == ENV_RUNNABLE) {
-						env_run(cur->env);
+{	
+	int now = 0;
+	if (curenv != NULL)
+	{
+		now = ENVX(curenv->env_id);
+		for (int i = 0; i < 4; i++)
+		{
+			Node *p;
+			if (i != envs[now].priority)
+			{	p = MFQueue[i].front;
+				while (p != NULL)
+				{
+					if (p->env->env_status == ENV_RUNNABLE)
+					{	
+						env_run(p->env);
 					}
-					cur = cur->next;
+					p = p->next;
 				}
 			}
-			else {
-				cur = MFQueue[i].front;
-				while (cur->env != curenv) {
-					cur = cur->next;
+			else
+			{	
+				p = MFQueue[i].front;
+				while (p->env != &envs[now])
+				{
+					p = p->next;
 				}
-				cur = cur->next;
-				while (cur != NULL) {
-					if (cur->env->env_status == ENV_RUNNABLE) {
-						env_run(cur->env);
+				while (p->next != NULL)
+				{
+					if (p->next->env->env_status == ENV_RUNNABLE)
+					{	
+						env_run(p->next->env);
 					}
-					cur = cur->next;
+					p = p->next;
 				}
-				cur = MFQueue[i].front;
-				while (cur->env != curenv) {
-					if (cur->env->env_status == ENV_RUNNABLE) {
-						env_run(cur->env);
+				p = MFQueue[i].front;
+				while (p->env != &envs[now])
+				{
+					if (p->env->env_status == ENV_RUNNABLE)
+					{
+						env_run(p->env);
 					}
-					cur = cur->next;
+					p = p->next;
 				}
-				if (curenv->env_status == ENV_RUNNABLE) {
+				if (curenv && curenv->env_status == ENV_RUNNING)
+				{	
 					env_run(curenv);
 				}
 			}
 		}
 	}
-	else {
-		for (int i = 0; i < 4; i++) {
-			Node* cur = MFQueue[i].front;
-			while (cur != NULL) {
-				if (cur->env->env_status == ENV_RUNNABLE) {
-					env_run(cur->env);
+	else
+	{
+		for (int i = 0; i < 4; i++)
+		{	
+			Node *p;
+			p = MFQueue[i].front;
+			while (p != NULL)
+			{
+				if (p->env->env_status == ENV_RUNNABLE)
+				{	
+					env_run(p->env);
 				}
-				cur = cur->next;
+				p = p->next;
+
 			}
 		}
 	}
 	sched_halt();
+	
+	// struct Env *idle;
 
 
-	// Implement simple round-robin scheduling.
-	//
-	// Search through 'envs' for an ENV_RUNNABLE environment in
-	// circular fashion starting just after the env this CPU was
-	// last running.  Switch to the first such environment found.
-	//
-	// If no envs are runnable, but the environment previously
-	// running on this CPU is still ENV_RUNNING, it's okay to
-	// choose that environment.
-	//
-	// Never choose an environment that's currently running on
-	// another CPU (env_status == ENV_RUNNING). If there are
-	// no runnable environments, simply drop through to the code
-	// below to halt the cpu.
+	// // Implement simple round-robin scheduling.
+	// //
+	// // Search through 'envs' for an ENV_RUNNABLE environment in
+	// // circular fashion starting just after the env this CPU was
+	// // last running.  Switch to the first such environment found.
+	// //
+	// // If no envs are runnable, but the environment previously
+	// // running on this CPU is still ENV_RUNNING, it's okay to
+	// // choose that environment.
+	// //
+	// // Never choose an environment that's currently running on
+	// // another CPU (env_status == ENV_RUNNING). If there are
+	// // no runnable environments, simply drop through to the code
+	// // below to halt the cpu.
 
-	// LAB 4: Your code here.
+	// // LAB 4: Your code here.
 
-/*
-	int start = 0;
-	int j;
+	// int start = 0;
+	// int j;
 
-	if (curenv)
-	{
-		start = ENVX(curenv->env_id) + 1; 
-	}
-	for (int i = 0; i < NENV ; i++)
-	{
-		j = (start + i) % NENV;
-		if (envs[j].env_status == ENV_RUNNABLE )
-		{
-			env_run(&envs[j]);
-		}
-	}
-	if (curenv && curenv->env_status == ENV_RUNNING)
-	{
-		env_run(curenv);
-	}
-	sched_halt();
-*/
+	// if (curenv)
+	// {
+	// 	start = ENVX(curenv->env_id) + 1; 
+	// }
+	// for (int i = 0; i < NENV ; i++)
+	// {
+	// 	j = (start + i) % NENV;
+	// 	if (envs[j].env_status == ENV_RUNNABLE )
+	// 	{
+	// 		env_run(&envs[j]);
+	// 	}
+	// }
+	// if (curenv && curenv->env_status == ENV_RUNNING)
+	// {
+	// 	env_run(curenv);
+	// }
+
 }
 
 // Halt this CPU when there is nothing to do. Wait until the
@@ -110,7 +127,7 @@ void sched_yield(void)
 void sched_halt(void)
 {
 	int i;
-
+	// cprintf("in halt\n");
 	// For debugging and testing purposes, if there are no runnable
 	// environments in the system, then drop into the kernel monitor.
 	for (i = 0; i < NENV; i++)
