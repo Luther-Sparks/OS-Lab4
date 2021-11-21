@@ -245,6 +245,10 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	e->env_status = ENV_RUNNABLE;
 	e->env_runs = 0;
 
+	// set this env's timeslice and priority
+	e->priority = 0;
+	e->timeslice = 0;
+
 	// Clear out all the saved register state,
 	// to prevent the register values
 	// of a prior environment inhabiting this Env structure
@@ -280,9 +284,6 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	*newenv_store = e;
 
 	// FIXME
-	// set this env's timeslice and priority
-	e->priority = 0;
-	e->timeslice = 0;
 	// insert this env into the MFQueue
 	e_insert(0, e);
 

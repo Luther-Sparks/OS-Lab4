@@ -275,6 +275,24 @@ trap_dispatch(struct Trapframe *tf)
 	if (tf->tf_trapno == IRQ_OFFSET + IRQ_TIMER)
 	{
 		lapic_eoi();
+		// FIXME
+		totalslice++;
+		if (totalslice == 20) {
+			for (int i = 1; i < 4; i++) {
+				Node* node = MFQueue[i].front;
+				if (node == NULL) {
+					continue;
+				}
+				while(node != NULL) {
+					e_remove(node->env);
+					node->env->priority = 0;
+					node->env->timeslice = 0;
+					e_insert(0, node->env);
+					node = MFQueue[i].front;
+				}
+			}
+			totalslice = 0;
+		}
 		sched_yield();
 		return;
 	}
