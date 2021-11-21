@@ -11,7 +11,56 @@ void sched_halt(void);
 // Choose a user environment to run and run it.
 void sched_yield(void)
 {
-	struct Env *idle;
+	// struct Env *idle;
+	if (curenv) {
+		for (int i = 0; i < 4; i++) {
+			Node* cur;
+			if (i != curenv->priority) {
+				cur = MFQueue[i].front;
+				while (cur != NULL) {
+					if (cur->env->env_status == ENV_RUNNABLE) {
+						env_run(cur->env);
+					}
+					cur = cur->next;
+				}
+			}
+			else {
+				cur = MFQueue[i].front;
+				while (cur->env != curenv) {
+					cur = cur->next;
+				}
+				cur = cur->next;
+				while (cur != NULL) {
+					if (cur->env->env_status == ENV_RUNNABLE) {
+						env_run(cur->env);
+					}
+					cur = cur->next;
+				}
+				cur = MFQueue[i].front;
+				while (cur->env != curenv) {
+					if (cur->env->env_status == ENV_RUNNABLE) {
+						env_run(cur->env);
+					}
+					cur = cur->next;
+				}
+				if (curenv->env_status == ENV_RUNNABLE) {
+					env_run(curenv);
+				}
+			}
+		}
+	}
+	else {
+		for (int i = 0; i < 4; i++) {
+			Node* cur = MFQueue[i].front;
+			while (cur != NULL) {
+				if (cur->env->env_status == ENV_RUNNABLE) {
+					env_run(cur->env);
+				}
+				cur = cur->next;
+			}
+		}
+	}
+	sched_halt();
 
 
 	// Implement simple round-robin scheduling.
@@ -31,6 +80,7 @@ void sched_yield(void)
 
 	// LAB 4: Your code here.
 
+/*
 	int start = 0;
 	int j;
 
@@ -51,6 +101,7 @@ void sched_yield(void)
 		env_run(curenv);
 	}
 	sched_halt();
+*/
 }
 
 // Halt this CPU when there is nothing to do. Wait until the

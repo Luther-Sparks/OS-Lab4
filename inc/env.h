@@ -72,7 +72,7 @@ struct Env {
 };
 
 
-#define INFINIE_TIMES	0xFFFFFFFF
+#define INFINIE_TIMES	0x7fffffff
 
 typedef struct Node {
 	struct Node* next;

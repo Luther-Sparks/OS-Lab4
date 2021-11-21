@@ -10,6 +10,14 @@ extern struct Env *envs;		// All environments
 #define curenv (thiscpu->cpu_env)		// Current environment
 extern struct Segdesc gdt[];
 
+// FIXME
+// declare some variables and functions we may use
+extern Queue MFQueue[4];
+extern Node nodepool[NENV];
+void e_insert(int priority, struct Env *e);
+void e_remove(struct Env *e);
+int totalslice;
+
 void	env_init(void);
 void	env_init_percpu(void);
 int	env_alloc(struct Env **e, envid_t parent_id);

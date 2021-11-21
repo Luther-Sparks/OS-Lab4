@@ -126,6 +126,18 @@ env_init(void)
 		env_free_list = &envs[i];
 	}
 
+	// FIXME
+	// init MFQueue and nodepool
+	totalslice = 0;
+	for (int i = 0; i < 4; i++) {
+		MFQueue[i].front = NULL;
+		MFQueue[i].rear = NULL;
+	}
+	MFQueue[0].timelimit = 1;
+	MFQueue[1].timelimit = 2;
+	MFQueue[2].timelimit = 4;
+	MFQueue[3].timelimit = INFINIE_TIMES;
+
 	// Per-CPU part of the initialization
 	env_init_percpu();
 }
@@ -266,6 +278,13 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
 	// commit the allocation
 	env_free_list = e->env_link;
 	*newenv_store = e;
+
+	// FIXME
+	// set this env's timeslice and priority
+	e->priority = 0;
+	e->timeslice = 0;
+	// insert this env into the MFQueue
+	e_insert(0, e);
 
 	cprintf("[%08x] new env %08x\n", curenv ? curenv->env_id : 0, e->env_id);
 	return 0;
@@ -453,6 +472,10 @@ env_free(struct Env *e)
 	e->env_status = ENV_FREE;
 	e->env_link = env_free_list;
 	env_free_list = e;
+
+	// FIXME
+	// this env is freed, so we should free its node from MFQueue
+	e_remove(e);
 }
 
 //
@@ -540,7 +563,7 @@ env_run(struct Env *e)
 	// FIXME
 	e->timeslice++;
 	if (e->timeslice == MFQueue[e->priority].timelimit) {
-		// this env should be switched to another queue since it has reached its timeslice
+		// this env should be switched to another MFQueue since it has reached its timeslice
 		e_remove(e);
 		e->priority++;
 		e->timeslice = 0;
@@ -557,51 +580,51 @@ env_run(struct Env *e)
 }
 
 /**
- * @brief 			insert env e into correct queue according to its priority
+ * @brief 			insert env e into correct MFQueue according to its priority
  * 
- * @param priority the priority of queue to be inserted
+ * @param priority the priority of MFQueue to be inserted
  * @param e 		the environment to insert
  */
 void
 e_insert(int priority, struct Env* e) {
 	nodepool[ENVX(e->env_id)].env = e;
 	nodepool[ENVX(e->env_id)].next = NULL;
-	if (queue[priority].front == NULL) {
-		queue[priority].front = &nodepool[ENVX(e->env_id)];
-		queue[priority].rear = &nodepool[ENVX(e->env_id)];
+	if (MFQueue[priority].front == NULL) {
+		MFQueue[priority].front = &nodepool[ENVX(e->env_id)];
+		MFQueue[priority].rear = &nodepool[ENVX(e->env_id)];
 		return;
 	}
-	queue[priority].rear->next = &nodepool[ENVX(e->env_id)];
-	queue[priority].rear = &nodepool[ENVX(e->env_id)];
-	queue[priority].rear->next = NULL;
+	MFQueue[priority].rear->next = &nodepool[ENVX(e->env_id)];
+	MFQueue[priority].rear = &nodepool[ENVX(e->env_id)];
+	MFQueue[priority].rear->next = NULL;
 }
 
 /**
- * @brief 			remove env e from queue according to its priority
+ * @brief 			remove env e from MFQueue according to its priority
  * 
  * @param e 		the environment to remove
  */
 void
 e_remove(struct Env* e){
-	if (queue[e->priority].front == NULL) {
+	if (MFQueue[e->priority].front == NULL) {
 		return;
 	}
-	if(queue[e->priority].front->env == e){
-		queue[e->priority].front = queue[e->priority].front->next;
+	if(MFQueue[e->priority].front->env == e){
+		MFQueue[e->priority].front = MFQueue[e->priority].front->next;
 		return;
 	}
-	Node* prev = queue[e->priority].front;
+	Node* prev = MFQueue[e->priority].front;
 	Node* cur = prev->next;
 	while(cur->env != &envs[ENVX(e->env_id)] && cur != NULL){
 		cur = cur->next;
 		prev = prev->next;
 	}
 	if(cur == NULL){
-		panic("e_remove error! Failed to remove env [%d] from queue[%d]", e->env_id, e->priority);
+		panic("e_remove error! Failed to remove env [%d] from MFQueue[%d]", e->env_id, e->priority);
 	}
 	prev->next = cur->next;
 	if (cur->next == NULL) {
-		queue[e->priority].rear = prev;
+		MFQueue[e->priority].rear = prev;
 	}
 	cur->next = NULL;
 	
