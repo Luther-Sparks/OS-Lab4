@@ -1,0 +1,399 @@
+diff --git a/__pycache__/gradelib.cpython-38.pyc b/__pycache__/gradelib.cpython-38.pyc
+new file mode 100644
+index 0000000..aae674e
+Binary files /dev/null and b/__pycache__/gradelib.cpython-38.pyc differ
+diff --git a/grade-lab4 b/grade-lab4
+index 4844dcf..ddf2190 100755
+--- a/grade-lab4
++++ b/grade-lab4
+@@ -175,7 +175,7 @@ def test_pingpong():
+ @test(5)
+ def test_primes():
+     r.user_test("primes", stop_on_line("CPU .: 1877"), stop_on_line(".*panic"),
+-                make_args=["CPUS=4"], timeout=60)
++                make_args=["CPUS=4"], timeout=120)
+     r.match(E(".00000000. new env $E1"),
+             E(".$E1. new env $E2"),
+             E("CPU .: 2 .$E2. new env $E3"),
+diff --git a/gradelib.pyc b/gradelib.pyc
+new file mode 100644
+index 0000000..885105b
+Binary files /dev/null and b/gradelib.pyc differ
+diff --git a/inc/env.h b/inc/env.h
+index b04f1a3..452a041 100644
+--- a/inc/env.h
++++ b/inc/env.h
+@@ -25,12 +25,13 @@ typedef int32_t envid_t;
+ // envid_ts less than 0 signify errors.  The envid_t == 0 is special, and
+ // stands for the current environment.
+ 
+ 
+ 	int env_ipc_perm;		// Perm of page mapping received
++
++	// FIXME
++	int priority;  // priority of the environment
++	int timeslice; // timeslice that the environment has used
+ };
+ 
++#define INIFINITE_TIMES 0x7fffffff
++
++typedef struct Node
++{
++	struct Node *next;
++	struct Env *env;
++} Node;
++typedef struct Queue
++{
++	int timeslice;
++	Node *front;
++	Node *rear;
++} Queue;
++Queue MFQueue[4];
++Node nodepool[NENV];
++
+ #endif // !JOS_INC_ENV_H
+
+diff --git a/kern/env.c b/kern/env.c
+index 14baa2e..422196d 100644
+--- a/kern/env.c
++++ b/kern/env.c
+@@ -15,18 +15,19 @@
+ #include <kern/cpu.h>
+ #include <kern/spinlock.h>
+ 
+@@ -114,38 +115,62 @@ envid2env(envid_t envid, struct Env **env_store, bool checkperm)
+ // they are in the envs array (i.e., so that the first call to
+ // env_alloc() returns envs[0]).
+ //
+ void
+ env_init(void)
+ {
+ 	// Set up envs array
+ 	// LAB 3: Your code here.
+ 	env_free_list = NULL;
+ 	for (int i = NENV - 1; i >= 0; i--) {		
+ 		envs[i].env_id = 0;
+ 		envs[i].env_link = env_free_list;
+ 		env_free_list = &envs[i];
+ 	}
+ 
++	//FIXME
++	// init MFQueue
++	totalslice = 0;
++	for (int i = 0; i < 4; i++)
++	{
++		MFQueue[i].front = NULL;
++		MFQueue[i].rear = NULL;
++	}
++	MFQueue[0].timeslice = 1;
++	MFQueue[1].timeslice = 2;
++	MFQueue[2].timeslice = 4;
++	MFQueue[3].timeslice = INIFINITE_TIMES;
++
+ 	// Per-CPU part of the initialization
+ 	env_init_percpu();
+ }
+ 
+
+ 
+@@ -233,6 +257,11 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
+ 	e->env_status = ENV_RUNNABLE;
+ 	e->env_runs = 0;
+ 
++	// FIXME
++	// set this env's timeslice and priority
++	e->priority = 0;
++	e->timeslice = 0;
++
+ 	// Clear out all the saved register state,
+ 	// to prevent the register values
+ 	// of a prior environment inhabiting this Env structure
+@@ -266,7 +295,10 @@ env_alloc(struct Env **newenv_store, envid_t parent_id)
+ 	// commit the allocation
+ 	env_free_list = e->env_link;
+ 	*newenv_store = e;
+-
++	// FIXME
++	// insert this env into the MFQueue
++	e_insert(0, e);
++	////
+ 	cprintf("[%08x] new env %08x\n", curenv ? curenv->env_id : 0, e->env_id);
+ 	return 0;
+ }
+
+@@ -453,6 +491,10 @@ env_free(struct Env *e)
+ 	e->env_status = ENV_FREE;
+ 	e->env_link = env_free_list;
+ 	env_free_list = e;
++
++	// FIXME
++	// this env is freed, so we should free its node from MFQueue
++	e_remove(e);
+ }
+ 
+ 
+
+ 	// Step 1: If this is a context switch (a new environment is running):
+ 	//	   1. Set the current environment (if any) back to
+@@ -530,14 +572,86 @@ env_run(struct Env *e)
+ 	//	e->env_tf to sensible values.
+ 
+ 	// LAB 3: Your code here.
+	if (curenv != NULL && curenv->env_status == ENV_RUNNING) {	
+ 		curenv->env_status = ENV_RUNNABLE;
+ 	}
+ 	curenv = e;
+ 	e->env_status = ENV_RUNNING;
+ 	e->env_runs++;
++	// FIXME
++	e->timeslice++;
++	if (e->timeslice == MFQueue[e->priority].timeslice)
++	{
++		// this env should be switched to another MFQueue since it has reached its timeslice
++		e_remove(e);
++		e->priority++;
++		e_insert(e->priority, e);
++		e->timeslice = 0;
++	}
++	else
++	{
++		e_remove(e);
++		e_insert(e->priority, e);
++	}
++
+ 	lcr3(PADDR(e->env_pgdir));
+	unlock_kernel();		
+ 	env_pop_tf(&e->env_tf);
+ }
+ 
++/**
++ * @brief 			insert env e into correct MFQueue according to its priority
++ * 
++ * @param priority the priority of MFQueue to be inserted
++ * @param e 		the environment to insert
++ */
++void e_insert(int priority, struct Env *e)
++{
++	nodepool[ENVX(e->env_id)].env = e;
++	nodepool[ENVX(e->env_id)].next = NULL;
++	if (MFQueue[priority].front == NULL)
++	{
++		MFQueue[priority].front = &nodepool[ENVX(e->env_id)];
++		MFQueue[priority].rear = &nodepool[ENVX(e->env_id)];
++		return;
++	}
++	MFQueue[priority].rear->next = &nodepool[ENVX(e->env_id)];
++	MFQueue[priority].rear = &nodepool[ENVX(e->env_id)];
++	MFQueue[priority].rear->next = NULL;
++}
++
++/**
++ * @brief 			remove env e from MFQueue according to its priority
++ * 
++ * @param e 		the environment to remove
++ */
++void e_remove(struct Env *e)
++{
++	if (MFQueue[e->priority].front == NULL)
++	{
++		return;
++	}
++	if (MFQueue[e->priority].front->env == e)
++	{
++		MFQueue[e->priority].front = MFQueue[e->priority].front->next;
++		return;
++	}
++	Node *prev = MFQueue[e->priority].front;
++	Node *cur = prev->next;
++	while (cur->env != &envs[ENVX(e->env_id)] && cur != NULL)
++	{
++		cur = cur->next;
++		prev = prev->next;
++	}
++	if (cur == NULL)
++	{
++		panic("e_remove error! Failed to remove env [%d] from queue[%d]", e->env_id, e->priority);
++	}
++	prev->next = cur->next;
++	if (cur->next == NULL)
++	{
++		MFQueue[e->priority].rear = prev;
++	}
++	cur->next = NULL;
++}
+\ No newline at end of file
+diff --git a/kern/env.h b/kern/env.h
+index 286ece7..d1ac989 100644
+--- a/kern/env.h
++++ b/kern/env.h
+@@ -6,31 +6,40 @@
+ #include <inc/env.h>
+ #include <kern/cpu.h>
+ 
++// FIXME
++// declare some variables and functions we may use
++extern Queue MFQueue[4]; // Queue
++extern Node nodepool[NENV];
++void e_insert(int priority, struct Env *e);
++void e_remove(struct Env *e);
++int totalslice;
+
+ #endif // TEST*
+ 
++
++
+ 	// Schedule and run the first user environment!
+ 	sched_yield();
+ }
+diff --git a/kern/sched.c b/kern/sched.c
+index 938f561..0a03eab 100644
+--- a/kern/sched.c
++++ b/kern/sched.c
+@@ -10,47 +10,115 @@ void sched_halt(void);
+ 
+ // Choose a user environment to run and run it.
+ void sched_yield(void)
+-{
+-	struct Env *idle;
+-
+-
+-	// Implement simple round-robin scheduling.
+-	//
+-	// Search through 'envs' for an ENV_RUNNABLE environment in
+-	// circular fashion starting just after the env this CPU was
+-	// last running.  Switch to the first such environment found.
+-	//
+-	// If no envs are runnable, but the environment previously
+-	// running on this CPU is still ENV_RUNNING, it's okay to
+-	// choose that environment.
+-	//
+-	// Never choose an environment that's currently running on
+-	// another CPU (env_status == ENV_RUNNING). If there are
+-	// no runnable environments, simply drop through to the code
+-	// below to halt the cpu.
+-
+-	// LAB 4: Your code here.
+-
+-	int start = 0;
+-	int j;
+-
+-	if (curenv)
+-	{
+-		start = ENVX(curenv->env_id) + 1; 
+-	}
+-	for (int i = 0; i < NENV ; i++)
++{	
++	int now = 0;
++	if (curenv != NULL)
+ 	{
+-		j = (start + i) % NENV;
+-		if (envs[j].env_status == ENV_RUNNABLE )
++		now = ENVX(curenv->env_id);
++		for (int i = 0; i < 4; i++)
+ 		{
+-			env_run(&envs[j]);
++			Node *p;
++			if (i != envs[now].priority)
++			{	p = MFQueue[i].front;
++				while (p != NULL)
++				{
++					if (p->env->env_status == ENV_RUNNABLE)
++					{	
++						env_run(p->env);
++					}
++					p = p->next;
++				}
++			}
++			else
++			{	
++				p = MFQueue[i].front;
++				while (p->env != &envs[now])
++				{
++					p = p->next;
++				}
++				while (p->next != NULL)
++				{
++					if (p->next->env->env_status == ENV_RUNNABLE)
++					{	
++						env_run(p->next->env);
++					}
++					p = p->next;
++				}
++				p = MFQueue[i].front;
++				while (p->env != &envs[now])
++				{
++					if (p->env->env_status == ENV_RUNNABLE)
++					{
++						env_run(p->env);
++					}
++					p = p->next;
++				}
++				if (curenv && curenv->env_status == ENV_RUNNING)
++				{	
++					env_run(curenv);
++				}
++			}
+ 		}
+ 	}
+-	if (curenv && curenv->env_status == ENV_RUNNING)
++	else
+ 	{
+-		env_run(curenv);
++		for (int i = 0; i < 4; i++)
++		{	
++			Node *p;
++			p = MFQueue[i].front;
++			while (p != NULL)
++			{
++				if (p->env->env_status == ENV_RUNNABLE)
++				{	
++					env_run(p->env);
++				}
++				p = p->next;
++
++			}
++		}
+ 	}
+ 	sched_halt();
++	
++	// struct Env *idle;
++
++
++	// // Implement simple round-robin scheduling.
++	// //
++	// // Search through 'envs' for an ENV_RUNNABLE environment in
++	// // circular fashion starting just after the env this CPU was
++	// // last running.  Switch to the first such environment found.
++	// //
++	// // If no envs are runnable, but the environment previously
++	// // running on this CPU is still ENV_RUNNING, it's okay to
++	// // choose that environment.
++	// //
++	// // Never choose an environment that's currently running on
++	// // another CPU (env_status == ENV_RUNNING). If there are
++	// // no runnable environments, simply drop through to the code
++	// // below to halt the cpu.
++
++	// // LAB 4: Your code here.
++
++	// int start = 0;
++	// int j;
++
++	// if (curenv)
++	// {
++	// 	start = ENVX(curenv->env_id) + 1; 
++	// }
++	// for (int i = 0; i < NENV ; i++)
++	// {
++	// 	j = (start + i) % NENV;
++	// 	if (envs[j].env_status == ENV_RUNNABLE )
++	// 	{
++	// 		env_run(&envs[j]);
++	// 	}
++	// }
++	// if (curenv && curenv->env_status == ENV_RUNNING)
++	// {
++	// 	env_run(curenv);
++	// }
++
+ }
